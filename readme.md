@@ -6,9 +6,11 @@
 
 - Learn how to implement parsers with Elm
 - Contribute to the community
-- Perhaps I'll finish this one :metal:
-- Need something that parses markdown but doesn't fail
+- Need something that parses markdown but doesn't fail... Erm much
 - And is configurable
+- Could be fun (or convince me to be a farmer)
+
+Perhaps I'll finish this one :metal:
 
 
 ## Road so far
