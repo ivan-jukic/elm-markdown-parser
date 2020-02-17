@@ -1,8 +1,15 @@
 module Markdown.Parsers.Inline exposing (..)
 
+import Char.Extras as Char
 import Markdown.Parsers.TextLine exposing (textLineParser)
 import Markdown.Types exposing (..)
 import Parser exposing (..)
+
+
+type InlineCheckpoints
+    = JustText String
+    | BoldStart
+    | BoldEnd
 
 
 
@@ -25,7 +32,21 @@ boldSymbol bounds =
                 "__"
 
 
-boldParser : BoldBounds -> Parser MarkdownInline
+boldStartParser : BoldBounds -> Parser InlineCheckpoints
+boldStartParser boldBound =
+    succeed BoldStart
+        |. boldSymbol boldBound
+        |. chompIf (not << Char.isWhitespace)
+
+
+boldEndParser : BoldBounds -> Parser InlineCheckpoints
+boldEndParser boldBound =
+    succeed BoldEnd
+        |. chompIf Char.isAlphaNum
+        |. boldSymbol boldBound
+
+
+boldParser : BoldBounds -> Parser Inline
 boldParser bounds =
     succeed Bold
         |. boldSymbol bounds
@@ -37,8 +58,23 @@ boldParser bounds =
 -- INLINE TEXT PARSER
 
 
-textParser : Parser MarkdownInline
+textParser : Parser InlineContent
 textParser =
-    chompWhile Char.isAlphaNum
+    chompIf Char.isAlphaNum
+        |. chompWhileNotSpecialChar
         |> getChompedString
-        |> map Text
+        |> map (List.singleton << Text)
+
+
+
+-- Special characters for inline content
+
+
+specialChars : List Char
+specialChars =
+    [ '*', '_', '~' ]
+
+
+chompWhileNotSpecialChar : Parser ()
+chompWhileNotSpecialChar =
+    chompWhile (\c -> not <| List.member c specialChars)

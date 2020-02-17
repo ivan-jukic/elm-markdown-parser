@@ -2,6 +2,8 @@
 
 **Word of caution: this is still heavily WIP**
 
+Following spec defined at: [https://www.markdownguide.org/basic-syntax/](https://www.markdownguide.org/basic-syntax/)
+
 ## Motivation
 
 - Learn how to implement parsers with Elm
