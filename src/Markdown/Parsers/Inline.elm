@@ -1,80 +1,159 @@
 module Markdown.Parsers.Inline exposing (..)
 
-import Char.Extras as Char
-import Markdown.Parsers.TextLine exposing (textLineParser)
-import Markdown.Types exposing (..)
+-- import Markdown.Types exposing (..)
+-- import Char.Extras as Char
+-- import Markdown.Parsers.TextLine exposing (textLineParser)
+
 import Parser exposing (..)
+import String.Extras exposing (startsOrEndsWithWhitespace)
 
 
-type InlineCheckpoints
-    = JustText String
-    | BoldStart
-    | BoldEnd
+type Inline
+    = Inline InlineContent
 
 
+type alias InlineContent =
+    List Section
 
--- BOLD PARSER
+
+type Section
+    = Bold InlineContent
+    | Italic InlineContent
+    | Strikethrough InlineContent
+    | Text String
 
 
-type BoldBounds
+type ContextBounds
     = TwoStars
     | TwoUnderlines
+    | TwoTilde
+    | SingleStar
+    | SingleUnderline
 
 
-boldSymbol : BoldBounds -> Parser ()
-boldSymbol bounds =
-    symbol <|
-        case bounds of
-            TwoStars ->
-                "**"
+boundToString : ContextBounds -> String
+boundToString bounds =
+    case bounds of
+        TwoStars ->
+            "**"
 
-            TwoUnderlines ->
-                "__"
+        TwoUnderlines ->
+            "__"
 
+        TwoTilde ->
+            "~~"
 
-boldStartParser : BoldBounds -> Parser InlineCheckpoints
-boldStartParser boldBound =
-    succeed BoldStart
-        |. boldSymbol boldBound
-        |. chompIf (not << Char.isWhitespace)
+        SingleStar ->
+            "*"
 
-
-boldEndParser : BoldBounds -> Parser InlineCheckpoints
-boldEndParser boldBound =
-    succeed BoldEnd
-        |. chompIf Char.isAlphaNum
-        |. boldSymbol boldBound
+        SingleUnderline ->
+            "_"
 
 
-boldParser : BoldBounds -> Parser Inline
-boldParser bounds =
-    succeed Bold
-        |. boldSymbol bounds
-        |= textParser
-        |. boldSymbol bounds
+inlineParser : Parser InlineContent
+inlineParser =
+    loop [] inlineParserSequence
 
 
+inlineParserSequence : InlineContent -> Parser (Step InlineContent InlineContent)
+inlineParserSequence revContent =
+    let
+        repeat : Section -> Step InlineContent InlineContent
+        repeat newContent =
+            Loop (newContent :: revContent)
 
--- INLINE TEXT PARSER
+        finish : () -> Step InlineContent InlineContent
+        finish _ =
+            Done (List.reverse revContent)
+    in
+    oneOf
+        [ map finish <| end
+        , map repeat <|
+            oneOf
+                [ boldParser
+                , textParser
+                ]
+        ]
 
 
-textParser : Parser InlineContent
+boldParser : Parser Section
+boldParser =
+    [ TwoStars, TwoUnderlines ]
+        |> List.map (parseBySymbol Bold)
+        |> oneOf
+
+
+textParser : Parser Section
 textParser =
-    chompIf Char.isAlphaNum
-        |. chompWhileNotSpecialChar
+    chompWhileNotSpecialChar
         |> getChompedString
-        |> map (List.singleton << Text)
+        |> map Text
 
 
+parseBySymbol : (InlineContent -> Section) -> ContextBounds -> Parser Section
+parseBySymbol tagger bound =
+    let
+        boundStr : String
+        boundStr =
+            boundToString bound
+    in
+    succeed identity
+        |. symbol boundStr
+        |= oneOf
+            -- Should we lazy parse alternatives? Eg. if we've parsed bold,
+            -- perhaps we only need to lazy parse italic, strikethrough, and
+            -- text???
+            [ lazy (\_ -> map List.singleton textParser)
+                |. symbol boundStr
+                |> map tagger
+            , textParser
+            ]
 
--- Special characters for inline content
 
-
-specialChars : List Char
-specialChars =
-    [ '*', '_', '~' ]
+isSpecialChar : Char -> Bool
+isSpecialChar c =
+    List.member c [ '*', '_', '~' ]
 
 
 chompWhileNotSpecialChar : Parser ()
 chompWhileNotSpecialChar =
-    chompWhile (\c -> not <| List.member c specialChars)
+    oneOf
+        [ end
+        , chompWhile (not << isSpecialChar)
+        ]
+
+
+
+------------------------------------------
+-- type InlineContext
+--     = BoldContext
+--     | ItalicContext
+--     | StrikethroughContext
+--     | TextContext String
+-- isContextChar : Char -> Bool
+-- isContextChar c =
+--     List.member c [ '*', '_', '~' ]
+-- boldContextParser : Parser InlineContext
+-- boldContextParser =
+--     succeed BoldContext
+--         |. oneOf
+--             [ contextSymbol TwoStars
+--             , contextSymbol TwoUnderlines
+--             ]
+-- strikethroughContextParser : Parser InlineContext
+-- strikethroughContextParser =
+--     succeed StrikethroughContext
+--         |. contextSymbol TwoTilde
+-- italicContextParser : Parser InlineContext
+-- italicContextParser =
+--     succeed ItalicContext
+--         |. oneOf
+--             [ contextSymbol SingleStar
+--             , contextSymbol SingleUnderline
+--             ]
+-- textContextParser : Parser InlineContext
+-- textContextParser =
+--     succeed identity
+--         |. chompWhile (not << isContextChar)
+--         |> getChompedString
+--         |> map TextContext
