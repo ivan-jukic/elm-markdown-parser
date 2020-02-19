@@ -90,24 +90,58 @@ textParser =
         |> map Text
 
 
+type ParseStatus
+    = ByBound
+    | ByText
+
+
 parseBySymbol : (InlineContent -> Section) -> ContextBounds -> Parser Section
 parseBySymbol tagger bound =
     let
         boundStr : String
         boundStr =
             boundToString bound
+
+        -- Run parser on the subcontent of the bold item!
+        parseSubcontent : String -> Result (List DeadEnd) InlineContent
+        parseSubcontent =
+            String.replace boundStr ""
+                >> run inlineParser
+
+        toContentByStatus : ( String, ParseStatus ) -> Section
+        toContentByStatus ( chomped, status ) =
+            let
+                hasWhitespace =
+                    startsOrEndsWithWhitespace chomped
+
+                asText =
+                    Text (boundStr ++ chomped)
+            in
+            case ( hasWhitespace, status ) of
+                ( False, ByBound ) ->
+                    tagger <|
+                        case parseSubcontent chomped of
+                            Ok inlineSections ->
+                                inlineSections
+
+                            Err _ ->
+                                -- Some error, tho this shouldn't happen, as the
+                                -- parsers should always succeed!
+                                [ asText ]
+
+                _ ->
+                    asText
     in
-    succeed identity
+    succeed Tuple.pair
         |. symbol boundStr
+        |= (chompWhileNotSpecialChar
+                |> getChompedString
+           )
         |= oneOf
-            -- Should we lazy parse alternatives? Eg. if we've parsed bold,
-            -- perhaps we only need to lazy parse italic, strikethrough, and
-            -- text???
-            [ lazy (\_ -> map List.singleton textParser)
-                |. symbol boundStr
-                |> map tagger
-            , textParser
+            [ succeed ByBound |. symbol boundStr
+            , succeed ByText
             ]
+        |> map toContentByStatus
 
 
 isSpecialChar : Char -> Bool
@@ -121,39 +155,3 @@ chompWhileNotSpecialChar =
         [ end
         , chompWhile (not << isSpecialChar)
         ]
-
-
-
-------------------------------------------
--- type InlineContext
---     = BoldContext
---     | ItalicContext
---     | StrikethroughContext
---     | TextContext String
--- isContextChar : Char -> Bool
--- isContextChar c =
---     List.member c [ '*', '_', '~' ]
--- boldContextParser : Parser InlineContext
--- boldContextParser =
---     succeed BoldContext
---         |. oneOf
---             [ contextSymbol TwoStars
---             , contextSymbol TwoUnderlines
---             ]
--- strikethroughContextParser : Parser InlineContext
--- strikethroughContextParser =
---     succeed StrikethroughContext
---         |. contextSymbol TwoTilde
--- italicContextParser : Parser InlineContext
--- italicContextParser =
---     succeed ItalicContext
---         |. oneOf
---             [ contextSymbol SingleStar
---             , contextSymbol SingleUnderline
---             ]
--- textContextParser : Parser InlineContext
--- textContextParser =
---     succeed identity
---         |. chompWhile (not << isContextChar)
---         |> getChompedString
---         |> map TextContext

@@ -38,7 +38,16 @@ And these kind of H2's
 
 ## TODO
 
-- [x] Parse headers
-- [ ] Add tests for header parsers
-- [ ] Parsing lists (ordered and unordered)
-- [ ] Other (will expand with more bulletpoints)
+- Parsers
+    - [x] Headings
+    - [ ] Lists (orderd & unordered)
+    - [ ] Blockquotes
+    - [ ] Links
+    - [ ] Images
+    - [ ] Inline code
+    - [ ] Code blocks
+    - [ ] Bold, italic, strikethrough
+- Other
+    - [ ] Rendering
+
+Plus also, tests for all!
