@@ -83,6 +83,13 @@ boldParser =
         |> oneOf
 
 
+italicParser : Parser Section
+italicParser =
+    [ SingleStar, SingleUnderline ]
+        |> List.map (parseBySymbol Italic)
+        |> oneOf
+
+
 textParser : Parser Section
 textParser =
     chompWhileNotSpecialChar
