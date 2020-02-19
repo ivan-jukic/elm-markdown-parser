@@ -1,9 +1,9 @@
 module Markdown.Parsers.Inline exposing (..)
 
 -- import Markdown.Types exposing (..)
--- import Char.Extras as Char
 -- import Markdown.Parsers.TextLine exposing (textLineParser)
 
+import Char.Extras as Char
 import Parser exposing (..)
 import String.Extras exposing (startsOrEndsWithWhitespace)
 
@@ -71,6 +71,8 @@ inlineParserSequence revContent =
         , map repeat <|
             oneOf
                 [ boldParser
+                , strikethroughParser
+                , italicParser
                 , textParser
                 ]
         ]
@@ -90,16 +92,16 @@ italicParser =
         |> oneOf
 
 
+strikethroughParser : Parser Section
+strikethroughParser =
+    parseBySymbol Strikethrough TwoTilde
+
+
 textParser : Parser Section
 textParser =
     chompWhileNotSpecialChar
         |> getChompedString
         |> map Text
-
-
-type ParseStatus
-    = ByBound
-    | ByText
 
 
 parseBySymbol : (InlineContent -> Section) -> ContextBounds -> Parser Section
@@ -109,46 +111,67 @@ parseBySymbol tagger bound =
         boundStr =
             boundToString bound
 
+        asText : String -> Section
+        asText =
+            Text << (++) boundStr
+
         -- Run parser on the subcontent of the bold item!
         parseSubcontent : String -> Result (List DeadEnd) InlineContent
         parseSubcontent =
-            String.replace boundStr ""
-                >> run inlineParser
+            String.replace boundStr "" >> run inlineParser
 
-        toContentByStatus : ( String, ParseStatus ) -> Section
-        toContentByStatus ( chomped, status ) =
-            let
-                hasWhitespace =
-                    startsOrEndsWithWhitespace chomped
+        runSubContentParsing : String -> Section
+        runSubContentParsing chomped =
+            tagger <|
+                case parseSubcontent chomped of
+                    Ok inlineSections ->
+                        inlineSections
 
-                asText =
-                    Text (boundStr ++ chomped)
-            in
-            case ( hasWhitespace, status ) of
-                ( False, ByBound ) ->
-                    tagger <|
-                        case parseSubcontent chomped of
-                            Ok inlineSections ->
-                                inlineSections
+                    Err _ ->
+                        -- Some error, tho this shouldn't happen, as the
+                        -- parsers should always succeed!
+                        [ asText chomped ]
 
-                            Err _ ->
-                                -- Some error, tho this shouldn't happen, as the
-                                -- parsers should always succeed!
-                                [ asText ]
+        parseSubContent : String -> Parser Section
+        parseSubContent chomped =
+            if startsOrEndsWithWhitespace chomped then
+                -- There's a whitespace at one end of the chopmed string, which
+                -- means it's not italic/bold/strikethrough, so we treat it as
+                -- text.
+                succeed (asText chomped)
 
-                _ ->
-                    asText
+            else
+                oneOf
+                    [ -- If the comped string is followed by the closing bound
+                      -- symbol, parse subcontent.
+                      succeed identity
+                        |. symbol boundStr
+                        |> map (\_ -> runSubContentParsing chomped)
+
+                    -- There's no closing bound symbol, so succeed as text!
+                    , succeed (asText chomped)
+                    ]
     in
-    succeed Tuple.pair
+    succeed identity
         |. symbol boundStr
-        |= (chompWhileNotSpecialChar
-                |> getChompedString
-           )
         |= oneOf
-            [ succeed ByBound |. symbol boundStr
-            , succeed ByText
+            [ succeed identity
+                |. chompIf (not << Char.isWhitespace)
+                |. chompWhileNotSpecialChar
+                |> getChompedString
+                -- At this point we know that the bound symbol does not have a
+                -- whitespace after, but still don't know if there's a
+                -- whitespace before the next special character.
+                |> andThen parseSubContent
+
+            -- If there's whitespace after the bound symbol, parse as regular
+            -- text, this is basically fallback so that the parser does not
+            -- fail!
+            , chompWhileNotSpecialChar
+                |> getChompedString
+                -- preserve initially chomped bounding symbol
+                |> map (Text << (++) boundStr)
             ]
-        |> map toContentByStatus
 
 
 isSpecialChar : Char -> Bool

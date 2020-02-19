@@ -9,7 +9,7 @@ import Test exposing (..)
 suite : Test
 suite =
     describe "Inline parsing"
-        [ only testInlineParser
+        [ testInlineParser
         ]
 
 
@@ -20,8 +20,28 @@ testInlineParser =
             run inlineParser
     in
     describe "Test inline content parser"
-        [ test "Parse some crazy text" <|
+        [ test "Inline parse some reulgar text with bold and italic elements" <|
             \_ ->
-                runInlineParser "** not really**bold**"
-                    |> Expect.equal (Ok [ Text "** not really", Bold [ Text "bold" ] ])
+                runInlineParser "This is **bold**, this is _italic_ and this ~~strikethrough~~"
+                    |> Expect.equal
+                        (Ok
+                            [ Text "This is "
+                            , Bold [ Text "bold" ]
+                            , Text ", this is "
+                            , Italic [ Text "italic" ]
+                            , Text " and this "
+                            , Strikethrough [ Text "strikethrough" ]
+                            ]
+                        )
+
+        --
+        , test "Parse some crazy text" <|
+            \_ ->
+                runInlineParser "** not really all**bold**"
+                    |> Expect.equal
+                        (Ok
+                            [ Text "** not really all"
+                            , Bold [ Text "bold" ]
+                            ]
+                        )
         ]

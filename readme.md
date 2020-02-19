@@ -40,13 +40,13 @@ And these kind of H2's
 
 - Parsers
     - [x] Headings
-    - [ ] Lists (orderd & unordered)
-    - [ ] Blockquotes
+    - [x] Bold, italic, strikethrough
+    - [ ] Inline code
     - [ ] Links
     - [ ] Images
-    - [ ] Inline code
+    - [ ] Lists (orderd & unordered)
+    - [ ] Blockquotes
     - [ ] Code blocks
-    - [ ] Bold, italic, strikethrough
 - Other
     - [ ] Rendering
 
