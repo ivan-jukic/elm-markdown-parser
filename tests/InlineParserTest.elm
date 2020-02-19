@@ -35,6 +35,20 @@ testInlineParser =
                         )
 
         --
+        , test "Bold, italic, and strikethrough can nest as well" <|
+            \_ ->
+                runInlineParser "Nested **bold *italic***"
+                    |> Expect.equal
+                        (Ok
+                            [ Text "Nested "
+                            , Bold
+                                [ Text "bold "
+                                , Italic [ Text "italic" ]
+                                ]
+                            ]
+                        )
+
+        --
         , test "Parse some crazy text" <|
             \_ ->
                 runInlineParser "** not really all**bold**"

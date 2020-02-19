@@ -40,7 +40,8 @@ And these kind of H2's
 
 - Parsers
     - [x] Headings
-    - [x] Bold, italic, strikethrough
+    - [x] Bold / italic / strikethrough
+    - [ ] Nested bold / italic / strikethrough
     - [ ] Inline code
     - [ ] Links
     - [ ] Images
