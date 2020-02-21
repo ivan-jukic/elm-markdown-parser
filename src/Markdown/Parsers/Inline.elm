@@ -1,9 +1,9 @@
 module Markdown.Parsers.Inline exposing (..)
 
 -- import Markdown.Types exposing (..)
--- import Markdown.Parsers.TextLine exposing (textLineParser)
 
 import Char.Extras as Char
+import Markdown.Parsers.TextLine exposing (textLineParser)
 import Parser exposing (..)
 import String.Extras exposing (startsOrEndsWithWhitespace)
 
@@ -134,30 +134,30 @@ parseBySymbol tagger bound =
 
         parseSubContent : String -> Parser Section
         parseSubContent chomped =
-            if startsOrEndsWithWhitespace chomped then
-                -- There's a whitespace at one end of the chopmed string, which
-                -- means it's not italic/bold/strikethrough, so we treat it as
-                -- text.
-                succeed (asText chomped)
+            let
+                boundLen =
+                    String.length boundStr
 
-            else
-                oneOf
-                    [ -- If the comped string is followed by the closing bound
-                      -- symbol, parse subcontent.
-                      succeed identity
-                        |. symbol boundStr
-                        |> map (\_ -> runSubContentParsing chomped)
+                isClosingBoundFound =
+                    String.left boundLen chomped == boundStr
+            in
+            succeed <|
+                -- Check if the bound was found and is at the end of the string!
+                if isClosingBoundFound then
+                    -- Drop closing bound, and parse the content inside
+                    chomped
+                        |> String.dropRight boundLen
+                        |> runSubContentParsing
 
-                    -- There's no closing bound symbol, so succeed as text!
-                    , succeed (asText chomped)
-                    ]
+                else
+                    asText chomped
     in
     succeed identity
         |. symbol boundStr
         |= oneOf
             [ succeed identity
                 |. chompIf (not << Char.isWhitespace)
-                |. chompWhileNotSpecialChar
+                |. chompUntilNewLineEndOrClosingBound boundStr
                 |> getChompedString
                 -- At this point we know that the bound symbol does not have a
                 -- whitespace after, but still don't know if there's a
@@ -172,6 +172,63 @@ parseBySymbol tagger bound =
                 -- preserve initially chomped bounding symbol
                 |> map (Text << (++) boundStr)
             ]
+
+
+chompUntilFirstBound : List String -> Parser String
+chompUntilFirstBound bounds =
+    
+
+
+
+{-| The idea behind this parser is to lazily consume character by character
+until we find the symbol bound that we're looking for, and then return all of
+the consumed characters
+-}
+chompUntilNewLineEndOrClosingBound : String -> Parser String
+chompUntilNewLineEndOrClosingBound sym =
+    let
+        lazySelfParser : Parser String
+        lazySelfParser =
+            lazy (\_ -> chompUntilNewLineEndOrClosingBound sym)
+    in
+    oneOf
+        [ backtrackable (closingBoundParser sym)
+        , end
+
+        -- chomp char and lazy try again
+        , chompIf (always True)
+            |. lazySelfParser
+        ]
+        |> andThen commit
+        |> getChompedString
+
+
+closingBoundParser : String -> Parser ()
+closingBoundParser sym =
+    let
+        isValidSymbol : Bool -> Parser ()
+        isValidSymbol hasTrailingSpecialChar =
+            if hasTrailingSpecialChar then
+                -- Although this parser can produce error, it should be used
+                -- so that it's backtrackable, and this error is not raised!
+                problem "Unexpected special character found while parsing!"
+
+            else
+                commit ()
+    in
+    succeed identity
+        |. chompIf (not << Char.isWhitespace)
+        |. symbol sym
+        |= oneOf
+            [ backtrackable (chompIf isSpecialChar)
+                |> map (always True)
+            , succeed False
+            ]
+        |> andThen isValidSymbol
+
+
+
+-- Special characters
 
 
 isSpecialChar : Char -> Bool
