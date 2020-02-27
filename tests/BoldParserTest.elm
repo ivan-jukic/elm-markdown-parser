@@ -9,7 +9,7 @@ import Test exposing (..)
 suite : Test
 suite =
     describe "Bold parsing"
-        [ testBoldParser
+        [ only testBoldParser
         ]
 
 
@@ -65,15 +65,17 @@ testBoldParser =
                 runBoldParser "__this is also not bold __"
                     |> Expect.equal (Ok (Text "__this is also not bold "))
 
-        --
+        -- The parser tries to find the closing ** bound, and it will chomp all
+        -- characters until it finds it, or reaches the end of the string. Thats
+        -- why the underscores are a part of the Text in the result.
         , test "You cannot mix and match asterisks & underscores" <|
             \_ ->
                 runBoldParser "**this is not bold__"
-                    |> Expect.equal (Ok (Text "**this is not bold"))
+                    |> Expect.equal (Ok (Text "**this is not bold__"))
 
         --
         , test "You cannot mix and match underscores & asterisks" <|
             \_ ->
                 runBoldParser "__this is not bold**"
-                    |> Expect.equal (Ok (Text "__this is not bold"))
+                    |> Expect.equal (Ok (Text "__this is not bold**"))
         ]

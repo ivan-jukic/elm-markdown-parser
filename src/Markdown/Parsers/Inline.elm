@@ -111,106 +111,100 @@ parseBySymbol tagger bound =
         boundStr =
             boundToString bound
 
+        boundLen : Int
+        boundLen =
+            String.length boundStr
+
         asText : String -> Section
         asText =
             Text << (++) boundStr
 
-        -- Run parser on the subcontent of the bold item!
-        parseSubcontent : String -> Result (List DeadEnd) InlineContent
-        parseSubcontent =
-            String.replace boundStr "" >> run inlineParser
-
         runSubContentParsing : String -> Section
         runSubContentParsing chomped =
-            tagger <|
-                case parseSubcontent chomped of
-                    Ok inlineSections ->
-                        inlineSections
+            chomped
+                -- |> String.dropRight boundLen
+                |> run inlineParser
+                |> Result.withDefault [ asText chomped ]
+                |> tagger
 
-                    Err _ ->
-                        -- Some error, tho this shouldn't happen, as the
-                        -- parsers should always succeed!
-                        [ asText chomped ]
-
-        parseSubContent : String -> Parser Section
-        parseSubContent chomped =
+        parseSubContent : ( String, ClosingBound ) -> Parser Section
+        parseSubContent ( chomped, boundFound ) =
             let
-                boundLen =
-                    String.length boundStr
-
-                isClosingBoundFound =
-                    String.left boundLen chomped == boundStr
+                _ =
+                    Debug.log "chomped" ( chomped, boundFound )
             in
             succeed <|
-                -- Check if the bound was found and is at the end of the string!
-                if isClosingBoundFound then
-                    -- Drop closing bound, and parse the content inside
-                    chomped
-                        |> String.dropRight boundLen
-                        |> runSubContentParsing
+                case boundFound of
+                    BoundFound ->
+                        -- remove bounds, and parse the sub content
+                        chomped
+                            |> String.dropLeft boundLen
+                            |> String.dropRight boundLen
+                            |> runSubContentParsing
 
-                else
-                    asText chomped
+                    BoundNotFound ->
+                        Text chomped
     in
     succeed identity
         |. symbol boundStr
         |= oneOf
-            [ succeed identity
+            [ -- 1st PATH!
+              -- If there's no whitespace after the bound symbol, chomp all the
+              -- chars until the closing bound is found, or we reach the end of
+              -- the string.
+              succeed identity
                 |. chompIf (not << Char.isWhitespace)
-                |. chompUntilNewLineEndOrClosingBound boundStr
-                |> getChompedString
-                -- At this point we know that the bound symbol does not have a
-                -- whitespace after, but still don't know if there's a
-                -- whitespace before the next special character.
-                |> andThen parseSubContent
+                |= chompUntilNewLineEndOrClosingBound boundStr
 
+            -- 2nd PATH!
             -- If there's whitespace after the bound symbol, parse as regular
             -- text, this is basically fallback so that the parser does not
             -- fail!
             , chompWhileNotSpecialChar
-                |> getChompedString
-                -- preserve initially chomped bounding symbol
-                |> map (Text << (++) boundStr)
+                |> map (always BoundNotFound)
             ]
+        |> mapChompedString Tuple.pair
+        |> andThen parseSubContent
 
 
-chompUntilFirstBound : List String -> Parser String
-chompUntilFirstBound bounds =
-    
-
+type ClosingBound
+    = BoundFound
+    | BoundNotFound
 
 
 {-| The idea behind this parser is to lazily consume character by character
 until we find the symbol bound that we're looking for, and then return all of
 the consumed characters
 -}
-chompUntilNewLineEndOrClosingBound : String -> Parser String
-chompUntilNewLineEndOrClosingBound sym =
-    let
-        lazySelfParser : Parser String
-        lazySelfParser =
-            lazy (\_ -> chompUntilNewLineEndOrClosingBound sym)
-    in
+chompUntilNewLineEndOrClosingBound : String -> Parser ClosingBound
+chompUntilNewLineEndOrClosingBound bound =
     oneOf
-        [ backtrackable (closingBoundParser sym)
+        [ closingBoundParser bound
+            |> backtrackable
+            |> map (always BoundFound)
         , end
-
-        -- chomp char and lazy try again
-        , chompIf (always True)
-            |. lazySelfParser
+            |> map (always BoundNotFound)
+        , succeed identity
+            |. chompIf (always True)
+            |= lazy (\_ -> chompUntilNewLineEndOrClosingBound bound)
         ]
         |> andThen commit
-        |> getChompedString
 
 
+{-| Parser for matching closing bound!
+
+    Closing bound should no be preceeded with a whitespace, and after the bound
+    there should be no immediate special characters.
+
+-}
 closingBoundParser : String -> Parser ()
-closingBoundParser sym =
+closingBoundParser bound =
     let
+        -- Although this parser can produce error, it should be used so that
+        -- it's backtrackable, and this error is not raised!
         isValidSymbol : Bool -> Parser ()
         isValidSymbol hasTrailingSpecialChar =
             if hasTrailingSpecialChar then
-                -- Although this parser can produce error, it should be used
-                -- so that it's backtrackable, and this error is not raised!
                 problem "Unexpected special character found while parsing!"
 
             else
@@ -218,9 +212,11 @@ closingBoundParser sym =
     in
     succeed identity
         |. chompIf (not << Char.isWhitespace)
-        |. symbol sym
+        |. symbol bound
         |= oneOf
-            [ backtrackable (chompIf isSpecialChar)
+            [ -- If there's another special char after the bound, backtrack!
+              chompIf isSpecialChar
+                |> backtrackable
                 |> map (always True)
             , succeed False
             ]

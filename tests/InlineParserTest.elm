@@ -1,7 +1,7 @@
 module InlineParserTest exposing (..)
 
 import Expect
-import Markdown.Parsers.Inline exposing (..)
+import Markdown.Parsers.Inline as Inline exposing (..)
 import Parser exposing (Problem(..), run)
 import Test exposing (..)
 
@@ -9,8 +9,9 @@ import Test exposing (..)
 suite : Test
 suite =
     describe "Inline parsing"
-        [ only testInlineLineChomping
-        , testInlineParser
+        [ testInlineParser
+
+        --, testInlineLineChomping
         ]
 
 
@@ -18,47 +19,46 @@ suite =
 or \_ or ~~), unil the same closing symbol is found or new line, or the end
 of the string we're parsing.
 -}
-testInlineLineChomping : Test
-testInlineLineChomping =
-    let
-        testParser =
-            run << chompUntilNewLineEndOrClosingBound
-    in
-    describe "Test parser to find closing bounds while parsing inline content."
-        [ test "There's only one closing bound at the end of string" <|
-            \_ ->
-                "looking for underscores__"
-                    |> testParser "__"
-                    |> Expect.equal (Ok "looking for underscores__")
 
-        --
-        , test "Closing bound is in the middle of the string, and should only be consumed up to that point" <|
-            \_ ->
-                "bound is** not at the end"
-                    |> testParser "**"
-                    |> Expect.equal (Ok "bound is**")
 
-        --
-        , test "There are other special characters and bound symbols in string after end bound" <|
-            \_ ->
-                "There*is_other**chars in this string as~~well..**"
-                    |> testParser "**"
-                    |> Expect.equal (Ok "There*is_other**")
 
-        --
-        , test "If there's no bound in string, return the whole string" <|
-            \_ ->
-                "There's no* end bound__ in this~~ string!"
-                    |> testParser "**"
-                    |> Expect.equal (Ok "There's no* end bound__ in this~~ string!")
-
-        --
-        , test "Not a closing bound if there's whitespace before, it may be opening bound further in the string." <|
-            \_ ->
-                "There's whitespace before **this bound."
-                    |> testParser "**"
-                    |> Expect.equal (Ok "There's whitespace before **this bound.")
-        ]
+-- testInlineLineChomping : Test
+-- testInlineLineChomping =
+--     let
+--         testParser =
+--             run << chompUntilNewLineEndOrClosingBound
+--     in
+--     describe "Test parser to find closing bounds while parsing inline content."
+--         [ test "There's only one closing bound at the end of string" <|
+--             \_ ->
+--                 "looking for underscores__"
+--                     |> testParser "__"
+--                     |> Expect.equal (Ok "looking for underscores__"))
+--         --
+--         , test "Closing bound is in the middle of the string, and should only be consumed up to that point" <|
+--             \_ ->
+--                 "bound is** not at the end"
+--                     |> testParser "**"
+--                     |> Expect.equal (Ok "bound is**")
+--         --
+--         , test "There are other special characters and bound symbols in string after end bound" <|
+--             \_ ->
+--                 "There*is_other**chars in this string as~~well..**"
+--                     |> testParser "**"
+--                     |> Expect.equal (Ok "There*is_other**")
+--         --
+--         , test "If there's no bound in string, return the whole string" <|
+--             \_ ->
+--                 "There's no* end bound__ in this~~ string!"
+--                     |> testParser "**"
+--                     |> Expect.equal (Ok "There's no* end bound__ in this~~ string!")
+--         --
+--         , test "Not a closing bound if there's whitespace before, it may be opening bound further in the string." <|
+--             \_ ->
+--                 "There's whitespace before **this bound."
+--                     |> testParser "**"
+--                     |> Expect.equal (Ok "There's whitespace before **this bound.")
+--         ]
 
 
 testInlineParser : Test
