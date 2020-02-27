@@ -47,12 +47,15 @@ type alias ListItems =
 {-| Certain parsed content might contain additional content that will need to
 be parsed, and that can be nested.
 -}
-type MarkdownInline
-    = Bold MarkdownInline
-    | Italic MarkdownInline
-    | BoldItalic MarkdownInline
-    | Strikethrough MarkdownInline
+type Inline
+    = Bold InlineContent
+    | Italic InlineContent
+    | Strikethrough InlineContent
     | Text String
+
+
+type alias InlineContent =
+    List Inline
 
 
 

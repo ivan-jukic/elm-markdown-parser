@@ -1,5 +1,7 @@
-module Markdown.Parsers.List exposing (olParser, ulParser)
+module Markdown.Parsers.List exposing (..)
 
+import Char.Parsers exposing (chompIfSpaceOrTab, chompOnlyOneNewLine)
+import Markdown.Parsers.TextLine exposing (textLineParser)
 import Markdown.Types exposing (..)
 import Parser exposing (..)
 
@@ -23,18 +25,27 @@ ulItemsParser reversedItems =
 
         -- If the previous parser does not start chomping, and fails, this one
         -- succeeds instead!
-        -- , defaultSucceed reversedItems
+        , defaultSucceed reversedItems
         ]
 
 
 ulItemParser : Parser ListItem
 ulItemParser =
-    problem "TODO not implemented"
+    succeed ListItem
+        |. oneOf
+            [ symbol "-"
+            , symbol "+"
+            , symbol "*"
+            ]
+        -- at least one space/tab must be present
+        |. chompIfSpaceOrTab
+        |. spaces
+        |= textLineParser
 
 
 olParser : Parser MarkdownList
 olParser =
-    succeed <| OrderedList []
+    problem "TODO not implemented"
 
 
 itemSucceed : ListItems -> Parser (ListItem -> ListItemsStep)
