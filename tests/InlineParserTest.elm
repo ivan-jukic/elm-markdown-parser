@@ -9,8 +9,33 @@ import Test exposing (..)
 suite : Test
 suite =
     describe "Inline parsing"
-        [ testInlineLineChomping
-        , only testInlineParser
+        [ only testBoundSearch
+        , testInlineLineChomping
+        , testInlineParser
+        ]
+
+
+testBoundSearch : Test
+testBoundSearch =
+    let
+        testParser =
+            chompWhileNotBound
+                |> Parser.getChompedString
+                |> run
+    in
+    describe "Test chompWhileNotBound"
+        [ test "Should find the ** context bound" <|
+            \_ ->
+                "finding** a bound"
+                    |> testParser
+                    |> Expect.equal (Ok "finding")
+        
+        --
+        , test "Should skip the (~) and find (__) context bound" <|
+            \_ ->
+                "skip ~ and find __ bound"
+                    |> testParser
+                    |> Expect.equal (Ok "skip ~ and find ")
         ]
 
 
@@ -90,7 +115,7 @@ testInlineParser =
                         )
 
         --
-        , test "Bold, italic, and strikethrough can nest as well" <|
+        , test "Bold, italic, and strikethrough can nest as well (1)" <|
             \_ ->
                 testParser "Nested **bold *italic***"
                     |> Expect.equal
@@ -99,6 +124,21 @@ testInlineParser =
                             , Bold
                                 [ Text "bold "
                                 , Italic [ Text "italic" ]
+                                ]
+                            ]
+                        )
+        
+        , test "Bold, italic, and strikethrough can nest as well (2)" <|
+            \_ ->
+                testParser "Nested **bold _italic_ ~~strike~~**"
+                    |> Expect.equal
+                        (Ok
+                            [ Text "Nested "
+                            , Bold
+                                [ Text "bold "
+                                , Italic [ Text "italic" ]
+                                , Text " "
+                                , Strikethrough [ Text "strike" ]
                                 ]
                             ]
                         )
@@ -123,6 +163,44 @@ testInlineParser =
                             [ Text "this ** is ** some ** non valid ** bounds and "
                             , Bold [ Text "one" ]
                             , Text " valid"
+                            ]
+                        )
+
+        --
+        , test "Nested bold and italic text defined with asterisks" <|
+            \_ ->
+                testParser "a bit of **nested *text***"
+                    |> Expect.equal
+                        (Ok
+                            [ Text "a bit of "
+                            , Bold
+                                [ Text "nested "
+                                , Italic [ Text "text" ]
+                                ]
+                            ]
+                        )
+
+        --
+        , test "Mixed up non valid bold and italic" <|
+            \_ ->
+                testParser "this **is a bit _of mixup**_"
+                    |> Expect.equal
+                        (Ok
+                            [ Text "this "
+                            , Bold [ Text "is a bit _of mixup" ]
+                            , Text "_"
+                            ]
+                        )
+        
+        --
+        , test "Single tilde (~) does not define any context" <|
+            \_ ->
+                testParser "this is *italic* but ~this~ is nothing"
+                    |> Expect.equal
+                        (Ok
+                            [ Text "this is "
+                            , Italic [ Text "italic" ]
+                            , Text " but ~this~ is nothing"
                             ]
                         )
         ]
