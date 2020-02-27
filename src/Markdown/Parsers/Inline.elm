@@ -3,9 +3,7 @@ module Markdown.Parsers.Inline exposing (..)
 -- import Markdown.Types exposing (..)
 
 import Char.Extras as Char
-import Markdown.Parsers.TextLine exposing (textLineParser)
 import Parser exposing (..)
-import String.Extras exposing (startsOrEndsWithWhitespace)
 
 
 type Inline
@@ -53,6 +51,7 @@ boundToString bounds =
 inlineParser : Parser InlineContent
 inlineParser =
     loop [] inlineParserSequence
+        |> map (mergeConsecutiveText [])
 
 
 inlineParserSequence : InlineContent -> Parser (Step InlineContent InlineContent)
@@ -70,7 +69,8 @@ inlineParserSequence revContent =
         [ map finish <| end
         , map repeat <|
             oneOf
-                [ boldParser
+                [ -- TODO plug in here link, image, emoji and inline code parsers!
+                  boldParser
                 , strikethroughParser
                 , italicParser
                 , textParser
@@ -104,6 +104,14 @@ textParser =
         |> map Text
 
 
+{-| A type used as a success indicator for the parsers that depend on finding
+the closing bound of some content.
+-}
+type ClosingBound
+    = BoundFound
+    | BoundNotFound
+
+
 parseBySymbol : (InlineContent -> Section) -> ContextBounds -> Parser Section
 parseBySymbol tagger bound =
     let
@@ -115,46 +123,35 @@ parseBySymbol tagger bound =
         boundLen =
             String.length boundStr
 
-        asText : String -> Section
-        asText =
-            Text << (++) boundStr
-
-        runSubContentParsing : String -> Section
-        runSubContentParsing chomped =
-            chomped
-                -- |> String.dropRight boundLen
-                |> run inlineParser
-                |> Result.withDefault [ asText chomped ]
-                |> tagger
-
-        parseSubContent : ( String, ClosingBound ) -> Parser Section
+        parseSubContent : ( String, ClosingBound ) -> Section
         parseSubContent ( chomped, boundFound ) =
-            let
-                _ =
-                    Debug.log "chomped" ( chomped, boundFound )
-            in
-            succeed <|
-                case boundFound of
-                    BoundFound ->
-                        -- remove bounds, and parse the sub content
-                        chomped
-                            |> String.dropLeft boundLen
-                            |> String.dropRight boundLen
-                            |> runSubContentParsing
+            case boundFound of
+                BoundFound ->
+                    -- Drop bounds, and run the string through the parser to
+                    -- parse the subcontent, as some things can be nested.
+                    -- If it fails, just return it as a text section.
+                    chomped
+                        |> String.dropLeft boundLen
+                        |> String.dropRight boundLen
+                        |> run inlineParser
+                        |> Result.withDefault [ Text chomped ]
+                        |> tagger
 
-                    BoundNotFound ->
-                        Text chomped
+                BoundNotFound ->
+                    Text chomped
     in
     succeed identity
         |. symbol boundStr
         |= oneOf
             [ -- 1st PATH!
               -- If there's no whitespace after the bound symbol, chomp all the
-              -- chars until the closing bound is found, or we reach the end of
-              -- the string.
-              succeed identity
-                |. chompIf (not << Char.isWhitespace)
-                |= chompUntilNewLineEndOrClosingBound boundStr
+              -- chars until the closing bound is found! If this parser fails
+              -- the next one will be tried!
+              backtrackable
+                (succeed identity
+                    |. chompIf (not << Char.isWhitespace)
+                    |= chompUntilClosingBound boundStr
+                )
 
             -- 2nd PATH!
             -- If there's whitespace after the bound symbol, parse as regular
@@ -164,31 +161,37 @@ parseBySymbol tagger bound =
                 |> map (always BoundNotFound)
             ]
         |> mapChompedString Tuple.pair
-        |> andThen parseSubContent
+        |> andThen (commit << parseSubContent)
 
 
-type ClosingBound
-    = BoundFound
-    | BoundNotFound
-
-
-{-| The idea behind this parser is to lazily consume character by character
-until we find the symbol bound that we're looking for, and then return all of
-the consumed characters
+{-| Chomps a string until it finds a closing bound. If there's no closing bound
+it will chomp the string until the end, and then return a problem.
 -}
-chompUntilNewLineEndOrClosingBound : String -> Parser ClosingBound
-chompUntilNewLineEndOrClosingBound bound =
+chompUntilClosingBound : String -> Parser ClosingBound
+chompUntilClosingBound bound =
     oneOf
         [ closingBoundParser bound
             |> backtrackable
             |> map (always BoundFound)
+
+        -- Without end here, chompIf would always succeed!
         , end
             |> map (always BoundNotFound)
+
+        -- Chomp any by default.
         , succeed identity
             |. chompIf (always True)
-            |= lazy (\_ -> chompUntilNewLineEndOrClosingBound bound)
+            |= lazy (\_ -> chompUntilClosingBound bound)
         ]
-        |> andThen commit
+        |> andThen
+            (\boundFound ->
+                case boundFound of
+                    BoundFound ->
+                        commit boundFound
+
+                    BoundNotFound ->
+                        problem <| "Could not find a closing bound for " ++ bound
+            )
 
 
 {-| Parser for matching closing bound!
@@ -223,10 +226,9 @@ closingBoundParser bound =
         |> andThen isValidSymbol
 
 
-
--- Special characters
-
-
+{-| Special characters have special meanings, they can define context bounds.
+Context here is bold, italic and strikethrough.
+-}
 isSpecialChar : Char -> Bool
 isSpecialChar c =
     List.member c [ '*', '_', '~' ]
@@ -234,7 +236,32 @@ isSpecialChar c =
 
 chompWhileNotSpecialChar : Parser ()
 chompWhileNotSpecialChar =
-    oneOf
-        [ end
-        , chompWhile (not << isSpecialChar)
-        ]
+    oneOf [ end, chompWhile (not << isSpecialChar) ]
+
+
+{-| Because of how inline content parsing works, basically stopping at any
+special character and checking if it defines bold/italic/strikethrough context,
+we can have a situation where the bounds are not valid, but the result of the
+parsing is multiple consecutive Text nodes.
+
+Eg. parsing string "This \*\* is \*\* non \*\* valid", produces
+
+    [ Text "This ", Text "** is ", Text "** non ", Text "** valid" ]
+
+This function will take all those consecutive Text's and merge them into one,
+to give us this:
+
+    [ Text "This ** is ** non ** valid" ]
+
+-}
+mergeConsecutiveText : InlineContent -> InlineContent -> InlineContent
+mergeConsecutiveText res content =
+    case content of
+        (Text a) :: (Text b) :: other ->
+            mergeConsecutiveText res (Text (a ++ b) :: other)
+
+        first :: other ->
+            mergeConsecutiveText (first :: res) other
+
+        [] ->
+            List.reverse res

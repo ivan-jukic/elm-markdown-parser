@@ -1,4 +1,4 @@
-module BoldParserTest exposing (..)
+module BoldParserTest exposing (suite)
 
 import Expect
 import Markdown.Parsers.Inline exposing (..)
@@ -9,7 +9,7 @@ import Test exposing (..)
 suite : Test
 suite =
     describe "Bold parsing"
-        [ only testBoldParser
+        [ testBoldParser
         ]
 
 
@@ -66,16 +66,16 @@ testBoldParser =
                     |> Expect.equal (Ok (Text "__this is also not bold "))
 
         -- The parser tries to find the closing ** bound, and it will chomp all
-        -- characters until it finds it, or reaches the end of the string. Thats
-        -- why the underscores are a part of the Text in the result.
+        -- characters until it finds it. If there's no respective closing bound,
+        -- it will chomp until it reaches next special character.
         , test "You cannot mix and match asterisks & underscores" <|
             \_ ->
                 runBoldParser "**this is not bold__"
-                    |> Expect.equal (Ok (Text "**this is not bold__"))
+                    |> Expect.equal (Ok (Text "**this is not bold"))
 
         --
         , test "You cannot mix and match underscores & asterisks" <|
             \_ ->
                 runBoldParser "__this is not bold**"
-                    |> Expect.equal (Ok (Text "__this is not bold**"))
+                    |> Expect.equal (Ok (Text "__this is not bold"))
         ]
