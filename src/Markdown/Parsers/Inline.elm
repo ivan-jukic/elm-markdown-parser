@@ -203,6 +203,13 @@ chompUntilClosingBound bound =
 closingBoundParser : String -> Parser ()
 closingBoundParser bound =
     let
+        -- TODO do this!!!!!!
+        testFn : Char -> Bool
+        testFn c =
+            bound
+                |> String.toList
+                |> List.member c
+
         -- Although this parser can produce error, it should be used so that
         -- it's backtrackable, and this error is not raised!
         isValidSymbol : Bool -> Parser ()

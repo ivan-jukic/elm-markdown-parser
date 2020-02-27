@@ -125,4 +125,29 @@ testInlineParser =
                             , Text " valid"
                             ]
                         )
+
+        --
+        , test "Nested bold and italic text defined with asterisks" <|
+            \_ ->
+                testParser "a bit of **nested *text***"
+                    |> Expect.equal
+                        (Ok
+                            [ Text "a bit of "
+                            , Bold
+                                [ Text "nested "
+                                , Italic [ Text "text" ]
+                                ]
+                            ]
+                        )
+
+        --
+        , test "Mixed up non valid bold and italic" <|
+            \_ ->
+                testParser "this **is a bit _of mixup**_"
+                    |> Expect.equal
+                        (Ok
+                            [ Bold [ Text "this is a bit _of mixup" ]
+                            , Text "_"
+                            ]
+                        )
         ]
