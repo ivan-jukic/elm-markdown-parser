@@ -29,6 +29,16 @@ type ContextBounds
     | SingleUnderline
 
 
+boundsList : List ContextBounds
+boundsList =
+    [ TwoStars
+    , TwoUnderlines
+    , TwoTilde
+    , SingleStar
+    , SingleUnderline
+    ]
+
+
 boundToString : ContextBounds -> String
 boundToString bounds =
     case bounds of
@@ -99,7 +109,7 @@ strikethroughParser =
 
 textParser : Parser Section
 textParser =
-    chompWhileNotSpecialChar
+    chompWhileNotBound
         |> getChompedString
         |> map Text
 
@@ -203,9 +213,8 @@ chompUntilClosingBound bound =
 closingBoundParser : String -> Parser ()
 closingBoundParser bound =
     let
-        -- TODO do this!!!!!!
-        testFn : Char -> Bool
-        testFn c =
+        charIsInBound : Char -> Bool
+        charIsInBound c =
             bound
                 |> String.toList
                 |> List.member c
@@ -224,8 +233,7 @@ closingBoundParser bound =
         |. chompIf (not << Char.isWhitespace)
         |. symbol bound
         |= oneOf
-            [ -- If there's another special char after the bound, backtrack!
-              chompIf isSpecialChar
+            [ chompIf charIsInBound
                 |> backtrackable
                 |> map (always True)
             , succeed False
@@ -244,6 +252,25 @@ isSpecialChar c =
 chompWhileNotSpecialChar : Parser ()
 chompWhileNotSpecialChar =
     oneOf [ end, chompWhile (not << isSpecialChar) ]
+
+
+{-| Parser which looks ahead and expects bounds. If a bound is not found,
+chomp a character and check ahead again, until you find a bound, or end is
+reached!
+-}
+chompWhileNotBound : Parser ()
+chompWhileNotBound =
+    oneOf
+        [ boundsList
+            |> List.map (symbol << boundToString)
+            |> oneOf
+            |> backtrackable
+            |> map (always True)
+        , end
+        , chompIf (always True)
+            |. lazy (\_ -> chompWhileNotBound)
+        ]
+        |> andThen commit
 
 
 {-| Because of how inline content parsing works, basically stopping at any
