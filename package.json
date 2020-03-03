@@ -6,7 +6,7 @@
   "author": "Ivan Jukic",
   "license": "MIT",
   "scripts": {
-    "test": "yarn elm-test tests/**/*.elm"
+    "test": "yarn elm-test tests/Test/**/*.elm"
   },
   "devDependencies": {
     "elm": "^0.19.1-3",

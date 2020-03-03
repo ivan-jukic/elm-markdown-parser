@@ -1,4 +1,4 @@
-module ItalicParserTest exposing (suite)
+module Test.ItalicParserTest exposing (suite)
 
 import Expect
 import Markdown.Parsers.Inline exposing (..)

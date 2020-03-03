@@ -1,4 +1,4 @@
-module HeadingParserTest exposing (suite)
+module Test.HeadingParserTest exposing (suite)
 
 import Expect
 import Parser exposing (run)

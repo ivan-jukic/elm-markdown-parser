@@ -1,7 +1,5 @@
 module Markdown.Parsers.Inline exposing (..)
 
--- import Markdown.Types exposing (..)
-
 import Char.Extras as Char
 import Parser exposing (..)
 
@@ -114,6 +112,10 @@ textParser =
         |> map Text
 
 
+
+-- Inline parser specific functions!
+
+
 {-| A type used as a success indicator for the parsers that depend on finding
 the closing bound of some content.
 -}
@@ -167,7 +169,7 @@ parseBySymbol tagger bound =
             -- If there's whitespace after the bound symbol, parse as regular
             -- text, this is basically fallback so that the parser does not
             -- fail!
-            , chompWhileNotSpecialChar
+            , chompWhileNotBound
                 |> map (always BoundNotFound)
             ]
         |> mapChompedString Tuple.pair
@@ -241,34 +243,43 @@ closingBoundParser bound =
         |> andThen isValidSymbol
 
 
-{-| Special characters have special meanings, they can define context bounds.
-Context here is bold, italic and strikethrough.
--}
-isSpecialChar : Char -> Bool
-isSpecialChar c =
-    List.member c [ '*', '_', '~' ]
-
-
-chompWhileNotSpecialChar : Parser ()
-chompWhileNotSpecialChar =
-    oneOf [ end, chompWhile (not << isSpecialChar) ]
-
-
-{-| Parser which looks ahead and expects bounds. If a bound is not found,
+{-| Parser which looks ahead and expects a bound. If a bound is not found,
 chomp a character and check ahead again, until you find a bound, or end is
 reached!
 -}
 chompWhileNotBound : Parser ()
 chompWhileNotBound =
+    let
+        oneOfBounds : Parser ()
+        oneOfBounds =
+            oneOf (List.map (symbol << boundToString) boundsList)
+
+        -- This parser throws an error when it reaches one of the bounds!
+        boundReachedParser : Parser ()
+        boundReachedParser =
+            oneOfBounds |> andThen (\_ -> problem "Bound reached, stop parsing!")
+
+        -- Parser that tries different routes, and will throw an error when
+        -- boundReachParser throws an error, or will stop parsing when the end
+        -- is reached. If none of this happen, it will chomp a character, and
+        -- lazily try the chompWhileNotBound parser again.
+        lazyBoundParser : Parser ()
+        lazyBoundParser =
+            oneOf
+                [ boundReachedParser
+                , end
+                , chompIf (always True)
+                    |. lazy (\_ -> chompWhileNotBound)
+                ]
+    in
+    -- When we reach a bound, or end of string lazyBoundParser will either fail
+    -- or finish. If it fails, we've reached a bound, and we need to backtrack,
+    -- as we do not want to consume the bound; in that case we apply the succeed
+    -- parser as the default. If it reaches end, it will not try to run
+    -- chompWhileNotBound again, and will finish.
     oneOf
-        [ boundsList
-            |> List.map (symbol << boundToString)
-            |> oneOf
-            |> backtrackable
-            |> map (always True)
-        , end
-        , chompIf (always True)
-            |. lazy (\_ -> chompWhileNotBound)
+        [ backtrackable lazyBoundParser
+        , succeed ()
         ]
         |> andThen commit
 

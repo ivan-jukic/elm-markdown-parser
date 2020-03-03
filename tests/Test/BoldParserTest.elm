@@ -1,4 +1,4 @@
-module BoldParserTest exposing (suite)
+module Test.BoldParserTest exposing (suite)
 
 import Expect
 import Markdown.Parsers.Inline exposing (..)

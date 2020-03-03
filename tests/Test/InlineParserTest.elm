@@ -1,18 +1,14 @@
-module InlineParserTest exposing (suite)
+module Test.InlineParserTest exposing
+    ( testBoundSearch
+    , testInlineLineChomping
+    , testInlineParser
+    )
 
 import Expect
 import Markdown.Parsers.Inline exposing (..)
 import Parser exposing ((|=), Problem(..), run)
+import ParserTest exposing (..)
 import Test exposing (..)
-
-
-suite : Test
-suite =
-    describe "Inline parsing"
-        [ only testBoundSearch
-        , testInlineLineChomping
-        , testInlineParser
-        ]
 
 
 testBoundSearch : Test
@@ -23,20 +19,22 @@ testBoundSearch =
                 |> Parser.getChompedString
                 |> run
     in
-    describe "Test chompWhileNotBound"
-        [ test "Should find the ** context bound" <|
-            \_ ->
+    testParser
+        |> compileTests "Test chompWhileNotBound parser"
+            [ ParserTest "Should find the (**) context bound"
                 "finding** a bound"
-                    |> testParser
-                    |> Expect.equal (Ok "finding")
+                (ResEq "finding")
 
-        --
-        , test "Should skip the (~) and find (__) context bound" <|
-            \_ ->
+            --
+            , ParserTest "Should skip the (~) and find (__) context bound"
                 "skip ~ and find __ bound"
-                    |> testParser
-                    |> Expect.equal (Ok "skip ~ and find ")
-        ]
+                (ResEq "skip ~ and find ")
+
+            --
+            , ParserTest "Should just return empty string if context bound is at beginning"
+                "~~ result should be empty string"
+                (ResEq "")
+            ]
 
 
 {-| Test line chomping after stumbiling upon parsing an opening bound (eg. \*\*

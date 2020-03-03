@@ -1,4 +1,4 @@
-module UnorderedListParserTest exposing (suite)
+module Test.UnorderedListParserTest exposing (suite)
 
 import Expect
 import Markdown.Parsers.List exposing (ulItemParser, ulParser)
