@@ -19,8 +19,7 @@ type alias ParserTests a =
 
 
 type alias ParserTest a =
-    { title : String
-    , testing : String
+    { testing : String
     , expecting : TestExpect a
     }
 
@@ -34,8 +33,8 @@ compileTests description tests testedParser =
     in
     describe description <|
         List.indexedMap
-            (\idx { title, testing, expecting } ->
-                test (toTestTitle idx title) <|
+            (\idx { testing, expecting } ->
+                test (toTestTitle idx testing) <|
                     \_ ->
                         testing
                             |> testedParser

@@ -1,7 +1,7 @@
 module Test.InlineParserTest exposing
     ( testBoundSearch
-    , testInlineLineChomping
     , testInlineParser
+    , testUnderscoresClosingBoundSearch
     )
 
 import Expect
@@ -11,84 +11,116 @@ import ParserTest exposing (..)
 import Test exposing (..)
 
 
+{-| Parser which consumes all chars until it finds a context bound, but it does
+not consume the context bound.
+-}
+boundSearchParser : TestedParser String
+boundSearchParser =
+    chompWhileNotBound
+        |> Parser.getChompedString
+        |> run
+
+
 testBoundSearch : Test
 testBoundSearch =
-    let
-        testParser =
-            chompWhileNotBound
-                |> Parser.getChompedString
-                |> run
-    in
-    testParser
-        |> compileTests "Test chompWhileNotBound parser"
-            [ ParserTest "Should find the (**) context bound"
-                "finding** a bound"
-                (ResEq "finding")
+    boundSearchParser
+        |> compileTests "chompWhileNotBound parser consumes chars until context bound is reached, but the bound is not consumed."
+            [ ParserTest
+                "Take chars until bound ** and not after"
+                (ResEq "Take chars until bound ")
 
             --
-            , ParserTest "Should skip the (~) and find (__) context bound"
-                "skip ~ and find __ bound"
-                (ResEq "skip ~ and find ")
+            , ParserTest
+                "Skip special chars like (~) __ but not context bound"
+                (ResEq "Skip special chars like (~) ")
 
             --
-            , ParserTest "Should just return empty string if context bound is at beginning"
-                "~~ result should be empty string"
+            , ParserTest
+                "~~ Result should be empty string if context bound is at beginning"
                 (ResEq "")
             ]
 
 
-{-| Test line chomping after stumbiling upon parsing an opening bound (eg. \*\*
-or \_ or ~~), unil the same closing symbol is found or new line, or the end
-of the string we're parsing.
+
+-- Inline search for closing bound!
+
+
+{-| We'd want to know if the bound was properly found, and what was the
+string that whas chomped, for testing purposes.
 -}
-testInlineLineChomping : Test
-testInlineLineChomping =
-    let
-        -- We'd want to know if the bound was properly found, and what was the
-        -- string that whas chomped.
-        testParser : String -> String -> Result (List Parser.DeadEnd) ( String, ClosingBound )
-        testParser bound =
-            Parser.run
-                (Parser.succeed identity
-                    |= chompUntilClosingBound bound
-                    |> Parser.mapChompedString Tuple.pair
-                )
-    in
-    describe "Test parser to find closing bounds while parsing inline content."
-        [ test "There's only one closing bound at the end of string" <|
-            \_ ->
-                "looking for underscores__"
-                    |> testParser "__"
-                    |> Expect.equal (Ok ( "looking for underscores__", BoundFound ))
+closingBoundParser : String -> TestedParser ( String, ClosingBound )
+closingBoundParser bound =
+    Parser.run
+        (Parser.succeed identity
+            |= chompUntilClosingBound bound
+            |> Parser.mapChompedString Tuple.pair
+        )
 
-        --
-        , test "Closing bound is in the middle of the string, and should only be consumed up to that point" <|
-            \_ ->
-                "bound is** not at the end"
-                    |> testParser "**"
-                    |> Expect.equal (Ok ( "bound is**", BoundFound ))
 
-        --
-        , test "There are other special characters and bound symbols in string after end bound" <|
-            \_ ->
-                "There*is_other**chars in this string as~~well..**"
-                    |> testParser "**"
-                    |> Expect.equal (Ok ( "There*is_other**", BoundFound ))
+testUnderscoresClosingBoundSearch : Test
+testUnderscoresClosingBoundSearch =
+    closingBoundParser "__"
+        |> compileTests "chompUntilClosingBound where bound is (__)"
+            [ ParserTest
+                "Looking for underscores__"
+                (ResEq ( "Looking for underscores__", BoundFound ))
 
-        --
-        , test "If there's no bound in string, return the whole string" <|
-            \_ ->
-                "There's no* end bound__ in this~~ string!"
-                    |> testParser "**"
-                    |> Expect.err
+            --
+            , ParserTest
+                "Bound is__ not at the end"
+                (ResEq ( "Bound is__", BoundFound ))
 
-        --
-        , test "Not a closing bound if there's whitespace before, it may be opening bound further in the string." <|
-            \_ ->
-                "There's whitespace before **this bound."
-                    |> testParser "**"
-                    |> Expect.err
-        ]
+            --
+            , ParserTest
+                "__ Bound at the beginning, but should be preceeded by chars."
+                ResErr
+
+            --
+            , ParserTest
+                "There's no* underscores bound** in this~~ string so throw err!"
+                ResErr
+
+            --
+            , ParserTest "looking for underscores_" ResErr
+            , ParserTest "looking for underscores**" ResErr
+            , ParserTest "looking for underscores*" ResErr
+            , ParserTest "looking for underscores~~" ResErr
+            , ParserTest "looking for underscores~" ResErr
+            ]
+
+
+
+-- describe "Test parser to find closing bounds while parsing inline content."
+--     [ test "There's only one closing bound at the end of string" <|
+--         \_ ->
+--             "looking for underscores__"
+--                 |> testParser "__"
+--                 |> Expect.equal (Ok ( "looking for underscores__", BoundFound ))
+--     --
+--     , test "Closing bound is in the middle of the string, and should only be consumed up to that point" <|
+--         \_ ->
+--             "bound is** not at the end"
+--                 |> testParser "**"
+--                 |> Expect.equal (Ok ( "bound is**", BoundFound ))
+--     --
+--     , test "There are other special characters and bound symbols in string after end bound" <|
+--         \_ ->
+--             "There*is_other**chars in this string as~~well..**"
+--                 |> testParser "**"
+--                 |> Expect.equal (Ok ( "There*is_other**", BoundFound ))
+--     --
+--     , test "If there's no bound in string, return the whole string" <|
+--         \_ ->
+--             "There's no* end bound__ in this~~ string!"
+--                 |> testParser "**"
+--                 |> Expect.err
+--     --
+--     , test "Not a closing bound if there's whitespace before, it may be opening bound further in the string." <|
+--         \_ ->
+--             "There's whitespace before **this bound."
+--                 |> testParser "**"
+--                 |> Expect.err
+--     ]
 
 
 testInlineParser : Test
