@@ -1,10 +1,10 @@
 module Test.InlineParserTest exposing
-    ( testBoundSearch
+    ( testAsterisksClosingBoundSearch
     , testInlineParser
+    , testOpenBoundSearch
     , testUnderscoresClosingBoundSearch
     )
 
-import Expect
 import Markdown.Parsers.Inline exposing (..)
 import Parser exposing ((|=), Problem(..), run)
 import ParserTest exposing (..)
@@ -16,28 +16,38 @@ not consume the context bound.
 -}
 boundSearchParser : TestedParser String
 boundSearchParser =
-    chompWhileNotBound
+    chompWhileNotOpenBound
         |> Parser.getChompedString
         |> run
 
 
-testBoundSearch : Test
-testBoundSearch =
+testOpenBoundSearch : Test
+testOpenBoundSearch =
     boundSearchParser
-        |> compileTests "chompWhileNotBound parser consumes chars until context bound is reached, but the bound is not consumed."
+        |> compileTests "chompWhileNotBound parser consumes chars until a valid context bound is reached, but the bound is not consumed."
             [ ParserTest
-                "Take chars until bound ** and not after"
+                "Take chars until bound **and not after"
                 (ResEq "Take chars until bound ")
 
             --
             , ParserTest
-                "Skip special chars like (~) __ but not context bound"
+                "Take chars until bound ** and after if it's not valid"
+                (ResEq "Take chars until bound ** and after if it's not valid")
+
+            --
+            , ParserTest
+                "Skip special chars like (~) __but not context bound"
                 (ResEq "Skip special chars like (~) ")
 
             --
             , ParserTest
-                "~~ Result should be empty string if context bound is at beginning"
+                "~~Result should be empty string if context bound is at beginning"
                 (ResEq "")
+
+            -- Space after bound makes it invalid opening bound
+            , ParserTest
+                "~~ Result is not empty if the bound is not valid"
+                (ResEq "~~ Result is not empty if the bound is not valid")
             ]
 
 
@@ -83,153 +93,125 @@ testUnderscoresClosingBoundSearch =
             --
             , ParserTest "looking for underscores_" ResErr
             , ParserTest "looking for underscores**" ResErr
-            , ParserTest "looking for underscores*" ResErr
-            , ParserTest "looking for underscores~~" ResErr
-            , ParserTest "looking for underscores~" ResErr
             ]
 
 
+testAsterisksClosingBoundSearch : Test
+testAsterisksClosingBoundSearch =
+    closingBoundParser "**"
+        |> compileTests "chompUntilClosingBound where bound is (**)"
+            [ ParserTest
+                "Looking for asterisks**"
+                (ResEq ( "Looking for asterisks**", BoundFound ))
 
--- describe "Test parser to find closing bounds while parsing inline content."
---     [ test "There's only one closing bound at the end of string" <|
---         \_ ->
---             "looking for underscores__"
---                 |> testParser "__"
---                 |> Expect.equal (Ok ( "looking for underscores__", BoundFound ))
---     --
---     , test "Closing bound is in the middle of the string, and should only be consumed up to that point" <|
---         \_ ->
---             "bound is** not at the end"
---                 |> testParser "**"
---                 |> Expect.equal (Ok ( "bound is**", BoundFound ))
---     --
---     , test "There are other special characters and bound symbols in string after end bound" <|
---         \_ ->
---             "There*is_other**chars in this string as~~well..**"
---                 |> testParser "**"
---                 |> Expect.equal (Ok ( "There*is_other**", BoundFound ))
---     --
---     , test "If there's no bound in string, return the whole string" <|
---         \_ ->
---             "There's no* end bound__ in this~~ string!"
---                 |> testParser "**"
---                 |> Expect.err
---     --
---     , test "Not a closing bound if there's whitespace before, it may be opening bound further in the string." <|
---         \_ ->
---             "There's whitespace before **this bound."
---                 |> testParser "**"
---                 |> Expect.err
---     ]
+            --
+            , ParserTest
+                "Bound is** not at the end"
+                (ResEq ( "Bound is**", BoundFound ))
+
+            --
+            , ParserTest
+                "** Bound at the beginning, but should be preceeded by chars."
+                ResErr
+
+            --
+            , ParserTest
+                "There's no* double asterisk bound__ in this~~ string so throw err!"
+                ResErr
+            ]
 
 
 testInlineParser : Test
 testInlineParser =
-    let
-        testParser =
-            run inlineParser
-    in
-    describe "Test inline content parser"
-        [ test "Inline parse some regular text with bold and italic elements" <|
-            \_ ->
-                testParser "This is **bold**, this is _italic_ and this ~~strikethrough~~"
-                    |> Expect.equal
-                        (Ok
-                            [ Text "This is "
-                            , Bold [ Text "bold" ]
-                            , Text ", this is "
-                            , Italic [ Text "italic" ]
-                            , Text " and this "
-                            , Strikethrough [ Text "strikethrough" ]
-                            ]
-                        )
+    inlineParser
+        |> run
+        |> compileTests "Test inline content parser"
+            [ ParserTest
+                "This is **bold**, this is _italic_ and this ~~strikethrough~~"
+                (ResEq
+                    [ Text "This is "
+                    , Bold [ Text "bold" ]
+                    , Text ", this is "
+                    , Italic [ Text "italic" ]
+                    , Text " and this "
+                    , Strikethrough [ Text "strikethrough" ]
+                    ]
+                )
 
-        --
-        , test "Bold, italic, and strikethrough can nest as well (1)" <|
-            \_ ->
-                testParser "Nested **bold *italic***"
-                    |> Expect.equal
-                        (Ok
-                            [ Text "Nested "
-                            , Bold
-                                [ Text "bold "
-                                , Italic [ Text "italic" ]
-                                ]
-                            ]
-                        )
-        , test "Bold, italic, and strikethrough can nest as well (2)" <|
-            \_ ->
-                testParser "Nested **bold _italic_ ~~strike~~**"
-                    |> Expect.equal
-                        (Ok
-                            [ Text "Nested "
-                            , Bold
-                                [ Text "bold "
-                                , Italic [ Text "italic" ]
-                                , Text " "
-                                , Strikethrough [ Text "strike" ]
-                                ]
-                            ]
-                        )
+            --
+            , ParserTest
+                "Nested **bold *italic***"
+                (ResEq
+                    [ Text "Nested "
+                    , Bold
+                        [ Text "bold "
+                        , Italic [ Text "italic" ]
+                        ]
+                    ]
+                )
 
-        --
-        , test "Parse some crazy text" <|
-            \_ ->
-                testParser "** not really all**bold**"
-                    |> Expect.equal
-                        (Ok
-                            [ Text "** not really all"
-                            , Bold [ Text "bold" ]
-                            ]
-                        )
+            --
+            , ParserTest
+                "Nested **bold _italic_ ~~strike~~**"
+                (ResEq
+                    [ Text "Nested "
+                    , Bold
+                        [ Text "bold "
+                        , Italic [ Text "italic" ]
+                        , Text " "
+                        , Strikethrough [ Text "strike" ]
+                        ]
+                    ]
+                )
 
-        --
-        , test "Non-valid consecutive context bounds" <|
-            \_ ->
-                testParser "this ** is ** some ** non valid ** bounds and **one** valid"
-                    |> Expect.equal
-                        (Ok
-                            [ Text "this ** is ** some ** non valid ** bounds and "
-                            , Bold [ Text "one" ]
-                            , Text " valid"
-                            ]
-                        )
+            --
+            , ParserTest
+                "** not really all**bold**"
+                (ResEq
+                    [ Text "** not really all"
+                    , Bold [ Text "bold" ]
+                    ]
+                )
 
-        --
-        , test "Nested bold and italic text defined with asterisks" <|
-            \_ ->
-                testParser "a bit of **nested *text***"
-                    |> Expect.equal
-                        (Ok
-                            [ Text "a bit of "
-                            , Bold
-                                [ Text "nested "
-                                , Italic [ Text "text" ]
-                                ]
-                            ]
-                        )
+            --
+            , ParserTest
+                "this ** is ** some ** non valid ** bounds and **one** valid"
+                (ResEq
+                    [ Text "this ** is ** some ** non valid ** bounds and "
+                    , Bold [ Text "one" ]
+                    , Text " valid"
+                    ]
+                )
 
-        --
-        , test "Mixed up non valid bold and italic" <|
-            \_ ->
-                testParser "this **is a bit _of mixup**_"
-                    |> Expect.equal
-                        (Ok
-                            [ Text "this "
-                            , Bold [ Text "is a bit _of mixup" ]
-                            , Text "_"
-                            ]
-                        )
+            --
+            , ParserTest
+                "a bit of **nested *text***"
+                (ResEq
+                    [ Text "a bit of "
+                    , Bold
+                        [ Text "nested "
+                        , Italic [ Text "text" ]
+                        ]
+                    ]
+                )
 
-        --
-        , test "Single tilde (~) does not define any context" <|
-            \_ ->
-                testParser "this is *italic* but ~this~ is nothing"
-                    |> Expect.equal
-                        (Ok
-                            [ Text "this is "
-                            , Italic [ Text "italic" ]
-                            , Text " but ~this~ is nothing"
-                            ]
-                        )
-        ]
+            --
+            , ParserTest
+                "this **is a bit _of mixup**_"
+                (ResEq
+                    [ Text "this "
+                    , Bold [ Text "is a bit _of mixup" ]
+                    , Text "_"
+                    ]
+                )
+
+            --
+            , ParserTest
+                "this is *italic* but ~this~ is nothing"
+                (ResEq
+                    [ Text "this is "
+                    , Italic [ Text "italic" ]
+                    , Text " but ~this~ is nothing"
+                    ]
+                )
+            ]
