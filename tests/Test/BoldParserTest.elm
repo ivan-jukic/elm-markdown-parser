@@ -1,75 +1,62 @@
-module Test.BoldParserTest exposing (suite)
+module Test.BoldParserTest exposing (testBoldParser)
 
-import Expect
 import Markdown.Parsers.Inline exposing (..)
-import Parser exposing (Problem(..), run)
+import Parser exposing (run)
+import ParserTest exposing (..)
 import Test exposing (..)
 
 
-suite : Test
-suite =
-    describe "Bold parsing"
-        [ testBoldParser
-        ]
-
-
+{-| Bold parser is designed so it doesnt't fail. If it cannot parse something
+as bold, it will return parsed text up until it encounters the first contextual
+bound in the string, or the end of the string.
+-}
 testBoldParser : Test
 testBoldParser =
-    let
-        runBoldParser =
-            run boldParser
-    in
-    describe "Test bold text parser"
-        [ test "**...** is bold text" <|
-            \_ ->
-                runBoldParser "**this is bold**"
-                    |> Expect.equal (Ok (Bold [ Text "this is bold" ]))
+    boldParser
+        |> run
+        |> compileTests "Test bold text parser"
+            [ ParserTestEq
+                "**this is bold**"
+                (Bold [ Text "this is bold" ])
 
-        --
-        , test "__...__ is bold text" <|
-            \_ ->
-                runBoldParser "__this is also bold__"
-                    |> Expect.equal (Ok (Bold [ Text "this is also bold" ]))
+            --
+            , ParserTestEq
+                "__this is also bold__"
+                (Bold [ Text "this is also bold" ])
 
-        -- This should be also test for inlineParser, but with different
-        -- expected parsing result.
-        , test "Bold parser should return Text if text after asterisks/underscores cannot be parsed as Bold" <|
-            \_ ->
-                runBoldParser "** not really**bold**"
-                    |> Expect.equal (Ok (Text "** not really"))
-        , test "Opening asterisks don't mean bold if there's space after" <|
-            \_ ->
-                runBoldParser "** this is not bold**"
-                    |> Expect.equal (Ok (Text "** this is not bold**"))
+            -- This should be also test for inlineParser, but with different
+            -- expected result of parsing.
+            , ParserTestEq
+                "** not really**bold**"
+                (Text "** not really")
 
-        --
-        , test "Opening underscores don't mean bold if there's space after" <|
-            \_ ->
-                runBoldParser "__ this is not bold__"
-                    |> Expect.equal (Ok (Text "__ this is not bold__"))
+            -- Opening asterisks don't mean bold if there's space after
+            , ParserTestEq
+                "** this is not bold**"
+                (Text "** this is not bold**")
 
-        --
-        , test "Closing asterisks don't mean bold if there's space before" <|
-            \_ ->
-                runBoldParser "**this is also not bold **"
-                    |> Expect.equal (Ok (Text "**this is also not bold **"))
+            -- Opening underscores don't mean bold if there's space after
+            , ParserTestEq
+                "__ this is not bold__"
+                (Text "__ this is not bold__")
 
-        --
-        , test "Closing underscores don't mean bold if there's space before" <|
-            \_ ->
-                runBoldParser "__this is also not bold __"
-                    |> Expect.equal (Ok (Text "__this is also not bold __"))
+            -- Closing asterisks don't mean bold if there's a space before
+            , ParserTestEq
+                "**this is also not bold **"
+                (Text "**this is also not bold **")
 
-        -- The parser tries to find the closing ** bound, and it will chomp all
-        -- characters until it finds it.
-        , test "You cannot mix and match asterisks & underscores" <|
-            \_ ->
-                runBoldParser "**this is not bold__"
-                    |> Expect.equal (Ok (Text "**this is not bold__"))
+            -- Closing underscores don't mean bold if there's a space before
+            , ParserTestEq
+                "__this is also not bold __"
+                (Text "__this is also not bold __")
 
-        --
-        , test "You cannot mix and match underscores & asterisks" <|
-            \_ ->
-                runBoldParser "__this is not bold**"
-                    |> Expect.equal (Ok (Text "__this is not bold**"))
-        ]
+            -- You cannot mix and match asterisks & underscores
+            , ParserTestEq
+                "**this is not bold__"
+                (Text "**this is not bold__")
+
+            -- You cannot mix and match underscores & asterisks
+            , ParserTestEq
+                "__this is not bold**"
+                (Text "__this is not bold**")
+            ]

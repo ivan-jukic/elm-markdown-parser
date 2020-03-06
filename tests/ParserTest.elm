@@ -5,12 +5,7 @@ import Parser exposing (DeadEnd, Problem(..))
 import Test exposing (Test, describe, test)
 
 
-type TestExpect a
-    = ResEq a
-    | ResErr
-
-
-type alias TestedParser a =
+type alias TestingParser a =
     String -> Result (List DeadEnd) a
 
 
@@ -18,32 +13,55 @@ type alias ParserTests a =
     List (ParserTest a)
 
 
-type alias ParserTest a =
-    { testing : String
-    , expecting : TestExpect a
-    }
+type alias Testing =
+    String
 
 
-compileTests : String -> ParserTests a -> TestedParser a -> Test
-compileTests description tests testedParser =
-    let
-        toTestTitle : Int -> String -> String
-        toTestTitle idx title =
-            "#" ++ String.fromInt (idx + 1) ++ " " ++ title
-    in
+type ParserTest a
+    = ParserTestEq Testing a
+    | ParserTestErr Testing
+
+
+getTestingString : ParserTest a -> String
+getTestingString ptest =
+    case ptest of
+        ParserTestEq testing _ ->
+            testing
+
+        ParserTestErr testing ->
+            testing
+
+
+compileTests : String -> ParserTests a -> TestingParser a -> Test
+compileTests description tests testingParser =
     describe description <|
-        List.indexedMap
-            (\idx { testing, expecting } ->
-                test (toTestTitle idx testing) <|
-                    \_ ->
-                        testing
-                            |> testedParser
-                            |> (case expecting of
-                                    ResEq val ->
-                                        Expect.equal (Ok val)
+        List.indexedMap (addParserTest testingParser) tests
 
-                                    ResErr ->
-                                        Expect.err
-                               )
-            )
-            tests
+
+addParserTest : TestingParser a -> Int -> ParserTest a -> Test
+addParserTest testingParser idx ptest =
+    let
+        testingString : String
+        testingString =
+            getTestingString ptest
+
+        testTitle : String
+        testTitle =
+            toTestTitle idx testingString
+    in
+    test testTitle <|
+        \_ ->
+            testingString
+                |> testingParser
+                |> (case ptest of
+                        ParserTestEq _ res ->
+                            Expect.equal (Ok res)
+
+                        ParserTestErr _ ->
+                            Expect.err
+                   )
+
+
+toTestTitle : Int -> String -> String
+toTestTitle idx title =
+    "#" ++ String.fromInt (idx + 1) ++ " " ++ title

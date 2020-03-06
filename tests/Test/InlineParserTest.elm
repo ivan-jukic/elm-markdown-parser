@@ -14,7 +14,7 @@ import Test exposing (..)
 {-| Parser which consumes all chars until it finds a context bound, but it does
 not consume the context bound.
 -}
-boundSearchParser : TestedParser String
+boundSearchParser : TestingParser String
 boundSearchParser =
     chompWhileNotOpenBound
         |> Parser.getChompedString
@@ -25,29 +25,29 @@ testOpenBoundSearch : Test
 testOpenBoundSearch =
     boundSearchParser
         |> compileTests "chompWhileNotBound parser consumes chars until a valid context bound is reached, but the bound is not consumed."
-            [ ParserTest
+            [ ParserTestEq
                 "Take chars until bound **and not after"
-                (ResEq "Take chars until bound ")
+                "Take chars until bound "
 
             --
-            , ParserTest
+            , ParserTestEq
                 "Take chars until bound ** and after if it's not valid"
-                (ResEq "Take chars until bound ** and after if it's not valid")
+                "Take chars until bound ** and after if it's not valid"
 
             --
-            , ParserTest
+            , ParserTestEq
                 "Skip special chars like (~) __but not context bound"
-                (ResEq "Skip special chars like (~) ")
+                "Skip special chars like (~) "
 
             --
-            , ParserTest
+            , ParserTestEq
                 "~~Result should be empty string if context bound is at beginning"
-                (ResEq "")
+                ""
 
             -- Space after bound makes it invalid opening bound
-            , ParserTest
+            , ParserTestEq
                 "~~ Result is not empty if the bound is not valid"
-                (ResEq "~~ Result is not empty if the bound is not valid")
+                "~~ Result is not empty if the bound is not valid"
             ]
 
 
@@ -58,7 +58,7 @@ testOpenBoundSearch =
 {-| We'd want to know if the bound was properly found, and what was the
 string that whas chomped, for testing purposes.
 -}
-closingBoundParser : String -> TestedParser ( String, ClosingBound )
+closingBoundParser : String -> TestingParser ( String, ClosingBound )
 closingBoundParser bound =
     Parser.run
         (Parser.succeed identity
@@ -71,28 +71,20 @@ testUnderscoresClosingBoundSearch : Test
 testUnderscoresClosingBoundSearch =
     closingBoundParser "__"
         |> compileTests "chompUntilClosingBound where bound is (__)"
-            [ ParserTest
+            [ ParserTestEq
                 "Looking for underscores__"
-                (ResEq ( "Looking for underscores__", BoundFound ))
+                ( "Looking for underscores__", BoundFound )
 
             --
-            , ParserTest
+            , ParserTestEq
                 "Bound is__ not at the end"
-                (ResEq ( "Bound is__", BoundFound ))
+                ( "Bound is__", BoundFound )
 
             --
-            , ParserTest
-                "__ Bound at the beginning, but should be preceeded by chars."
-                ResErr
-
-            --
-            , ParserTest
-                "There's no* underscores bound** in this~~ string so throw err!"
-                ResErr
-
-            --
-            , ParserTest "looking for underscores_" ResErr
-            , ParserTest "looking for underscores**" ResErr
+            , ParserTestErr "__ Bound at the beginning, but should be preceeded by chars."
+            , ParserTestErr "There's no* underscores bound** in this~~ string so throw err!"
+            , ParserTestErr "looking for underscores_"
+            , ParserTestErr "looking for underscores**"
             ]
 
 
@@ -100,24 +92,18 @@ testAsterisksClosingBoundSearch : Test
 testAsterisksClosingBoundSearch =
     closingBoundParser "**"
         |> compileTests "chompUntilClosingBound where bound is (**)"
-            [ ParserTest
+            [ ParserTestEq
                 "Looking for asterisks**"
-                (ResEq ( "Looking for asterisks**", BoundFound ))
+                ( "Looking for asterisks**", BoundFound )
 
             --
-            , ParserTest
+            , ParserTestEq
                 "Bound is** not at the end"
-                (ResEq ( "Bound is**", BoundFound ))
+                ( "Bound is**", BoundFound )
 
             --
-            , ParserTest
-                "** Bound at the beginning, but should be preceeded by chars."
-                ResErr
-
-            --
-            , ParserTest
-                "There's no* double asterisk bound__ in this~~ string so throw err!"
-                ResErr
+            , ParserTestErr "** Bound at the beginning, but should be preceeded by chars."
+            , ParserTestErr "There's no* double asterisk bound__ in this~~ string so throw err!"
             ]
 
 
@@ -126,92 +112,76 @@ testInlineParser =
     inlineParser
         |> run
         |> compileTests "Test inline content parser"
-            [ ParserTest
+            [ ParserTestEq
                 "This is **bold**, this is _italic_ and this ~~strikethrough~~"
-                (ResEq
-                    [ Text "This is "
-                    , Bold [ Text "bold" ]
-                    , Text ", this is "
-                    , Italic [ Text "italic" ]
-                    , Text " and this "
-                    , Strikethrough [ Text "strikethrough" ]
-                    ]
-                )
+                [ Text "This is "
+                , Bold [ Text "bold" ]
+                , Text ", this is "
+                , Italic [ Text "italic" ]
+                , Text " and this "
+                , Strikethrough [ Text "strikethrough" ]
+                ]
 
             --
-            , ParserTest
+            , ParserTestEq
                 "Nested **bold *italic***"
-                (ResEq
-                    [ Text "Nested "
-                    , Bold
-                        [ Text "bold "
-                        , Italic [ Text "italic" ]
-                        ]
-                    ]
-                )
-
-            --
-            , ParserTest
-                "Nested **bold _italic_ ~~strike~~**"
-                (ResEq
-                    [ Text "Nested "
-                    , Bold
-                        [ Text "bold "
-                        , Italic [ Text "italic" ]
-                        , Text " "
-                        , Strikethrough [ Text "strike" ]
-                        ]
-                    ]
-                )
-
-            --
-            , ParserTest
-                "** not really all**bold**"
-                (ResEq
-                    [ Text "** not really all"
-                    , Bold [ Text "bold" ]
-                    ]
-                )
-
-            --
-            , ParserTest
-                "this ** is ** some ** non valid ** bounds and **one** valid"
-                (ResEq
-                    [ Text "this ** is ** some ** non valid ** bounds and "
-                    , Bold [ Text "one" ]
-                    , Text " valid"
-                    ]
-                )
-
-            --
-            , ParserTest
-                "a bit of **nested *text***"
-                (ResEq
-                    [ Text "a bit of "
-                    , Bold
-                        [ Text "nested "
-                        , Italic [ Text "text" ]
-                        ]
-                    ]
-                )
-
-            --
-            , ParserTest
-                "this **is a bit _of mixup**_"
-                (ResEq
-                    [ Text "this "
-                    , Bold [ Text "is a bit _of mixup" ]
-                    , Text "_"
-                    ]
-                )
-
-            --
-            , ParserTest
-                "this is *italic* but ~this~ is nothing"
-                (ResEq
-                    [ Text "this is "
+                [ Text "Nested "
+                , Bold
+                    [ Text "bold "
                     , Italic [ Text "italic" ]
-                    , Text " but ~this~ is nothing"
                     ]
-                )
+                ]
+
+            --
+            , ParserTestEq
+                "Nested **bold _italic_ ~~strike~~**"
+                [ Text "Nested "
+                , Bold
+                    [ Text "bold "
+                    , Italic [ Text "italic" ]
+                    , Text " "
+                    , Strikethrough [ Text "strike" ]
+                    ]
+                ]
+
+            --
+            , ParserTestEq
+                "** not really all**bold**"
+                [ Text "** not really all"
+                , Bold [ Text "bold" ]
+                ]
+
+            --
+            , ParserTestEq
+                "this ** is ** some ** non valid ** bounds and **one** valid"
+                [ Text "this ** is ** some ** non valid ** bounds and "
+                , Bold [ Text "one" ]
+                , Text " valid"
+                ]
+
+            --
+            , ParserTestEq
+                "a bit of **nested *text***"
+                [ Text "a bit of "
+                , Bold
+                    [ Text "nested "
+                    , Italic [ Text "text" ]
+                    ]
+                ]
+
+            --
+            , ParserTestEq
+                "this **is a bit _of mixup**_"
+                [ Text "this "
+                , Bold [ Text "is a bit _of mixup" ]
+                , Text "_"
+                ]
+
+            --
+            , ParserTestEq
+                "this is *italic* but ~this~ is nothing"
+                [ Text "this is "
+                , Italic [ Text "italic" ]
+                , Text " but ~this~ is nothing"
+                ]
             ]
