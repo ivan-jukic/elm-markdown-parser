@@ -16,6 +16,7 @@ type Section
     = Bold InlineContent
     | Italic InlineContent
     | Strikethrough InlineContent
+    | LineBreak
     | Text String
 
 
@@ -298,6 +299,47 @@ chompWhileNotOpenBound =
         , succeed ()
         ]
         |> andThen commit
+
+
+{-| Parser to find line breaks. Line break is when at the end of the line we
+have two or more spaces, followed by new line, and then with some character.
+Two or more new lines would define a new paragraph.
+
+This parser should be used as backtrackable!
+
+-}
+lineBreakParser : Parser Section
+lineBreakParser =
+    let
+        brParser : Parser ()
+        brParser =
+            succeed ()
+                |. chompIf Char.isSpace
+                |. chompIf Char.isSpace
+                |. chompWhile Char.isSpace
+                |. chompIf Char.isNewLine
+
+        -- line break is only valid if there's no whitespace after the line
+        -- break char sequence (two or more spaces, followed by single new line)
+        validateBrSequence : () -> Parser Section
+        validateBrSequence _ =
+            andThen checkBrSquenceEnding <|
+                oneOf
+                    [ chompIf Char.isWhitespace
+                        |> backtrackable
+                        |> map (always True)
+                    , succeed False
+                    ]
+
+        checkBrSquenceEnding : Bool -> Parser Section
+        checkBrSquenceEnding hasBadEnding =
+            if hasBadEnding then
+                problem "Line break should not be followed by whitespace."
+
+            else
+                commit LineBreak
+    in
+    brParser |> andThen validateBrSequence
 
 
 {-| Because of how inline content parsing works, basically stopping at any

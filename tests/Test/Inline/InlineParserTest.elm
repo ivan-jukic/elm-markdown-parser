@@ -1,4 +1,4 @@
-module Test.InlineParserTest exposing
+module Test.Inline.InlineParserTest exposing
     ( testAsterisksClosingBoundSearch
     , testInlineParser
     , testOpenBoundSearch

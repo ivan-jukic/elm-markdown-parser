@@ -1,4 +1,4 @@
-module Test.BoldParserTest exposing (testBoldParser)
+module Test.Inline.BoldParserTest exposing (testBoldParser)
 
 import Markdown.Parsers.Inline exposing (..)
 import Parser exposing (run)

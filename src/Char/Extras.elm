@@ -11,6 +11,16 @@ isWhitespace c =
     c == ' ' || c == '\t' || c == '\n'
 
 
+isNotWhitespace : Char -> Bool
+isNotWhitespace =
+    not << isWhitespace
+
+
+isSpace : Char -> Bool
+isSpace =
+    (==) ' '
+
+
 isNewLine : Char -> Bool
 isNewLine =
     (==) '\n'
