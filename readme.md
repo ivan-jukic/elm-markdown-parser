@@ -35,20 +35,28 @@ And these kind of H2's
 ----------------------
 ```
 
+**Can parse inline content**
+
+```
+Parse **bold**, _italic_, and even ~~strikethrough~~ content!
+```
+
 
 ## TODO
 
-- Parsers
+- Block parsers
     - [x] Headings
-    - [x] Bold / italic / strikethrough
-    - [ ] Nested bold / italic / strikethrough
-    - [ ] Inline code
-    - [ ] Links
-    - [ ] Images
+        - [ ] Refactor headings parsers
     - [ ] Lists (orderd & unordered)
     - [ ] Blockquotes
     - [ ] Code blocks
+- Inline parsers
+    - [x] Bold / italic / strikethrough
+    - [x] Nested bold / italic / strikethrough
+    - [ ] Line breaks
+    - [ ] Code
+    - [ ] Links
+    - [ ] Images
 - Other
     - [ ] Rendering
 
-Plus also, tests for all!
